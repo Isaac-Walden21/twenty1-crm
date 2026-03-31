@@ -1,6 +1,43 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let _resend: Resend | null = null;
+function getResend(): Resend {
+  if (!_resend) {
+    _resend = new Resend(process.env.RESEND_API_KEY);
+  }
+  return _resend;
+}
+
+export interface SendEmailParams {
+  to: string;
+  subject: string;
+  body: string;
+  sender?: string;
+  replyToMessageId?: string;
+}
+
+const SENDER_EMAILS: Record<string, string> = {
+  isaac: "Isaac Walden <isaac@twenty1-media.com>",
+  asher: "Asher <asher@twenty1-media.com>",
+};
+
+export async function sendEmailViaResend(params: SendEmailParams): Promise<{ id: string }> {
+  const from = SENDER_EMAILS[params.sender || "isaac"] || SENDER_EMAILS.isaac;
+
+  const res = await getResend().emails.send({
+    from,
+    to: [params.to],
+    subject: params.subject,
+    text: params.body,
+    ...(params.replyToMessageId ? { headers: { "In-Reply-To": params.replyToMessageId, References: params.replyToMessageId } } : {}),
+  });
+
+  if (res.error) {
+    throw new Error(res.error.message || "Resend send failed");
+  }
+
+  return { id: res.data?.id || "" };
+}
 
 export interface ResendEmail {
   id: string;
@@ -27,7 +64,7 @@ export async function getResendEmails(): Promise<ResendEmail[]> {
   const all: ResendEmail[] = [];
 
   // Resend paginates — fetch all pages
-  const res = await resend.emails.list();
+  const res = await getResend().emails.list();
   if (res.data?.data) {
     all.push(...(res.data.data as unknown as ResendEmail[]));
   }
@@ -36,12 +73,12 @@ export async function getResendEmails(): Promise<ResendEmail[]> {
 }
 
 export async function getResendEmailDetail(id: string) {
-  const res = await resend.emails.get(id);
+  const res = await getResend().emails.get(id);
   return res.data;
 }
 
 export async function getResendDomains(): Promise<ResendDomain[]> {
-  const res = await resend.domains.list();
+  const res = await getResend().domains.list();
   return (res.data?.data || []) as unknown as ResendDomain[];
 }
 

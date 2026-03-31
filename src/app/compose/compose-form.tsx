@@ -298,8 +298,8 @@ export function ComposeForm({
             className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
           >
             {senders.map((s) => (
-              <option key={s.name} value={s.name} disabled={!s.configured}>
-                {s.name.charAt(0).toUpperCase() + s.name.slice(1)}{!s.configured ? " (not connected)" : ""}
+              <option key={s.name} value={s.name}>
+                {s.name.charAt(0).toUpperCase() + s.name.slice(1)}
               </option>
             ))}
           </select>

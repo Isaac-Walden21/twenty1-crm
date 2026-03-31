@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sendEmail, isGmailConfigured } from "@/lib/gmail";
+import { sendEmailViaResend } from "@/lib/resend";
 import { getDb } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -13,16 +13,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "to, subject, and email_body are required" }, { status: 400 });
   }
 
-  if (!isGmailConfigured(sender)) {
-    return NextResponse.json({ error: `Gmail not configured for ${sender}. Run: npm run gmail-setup ${sender}` }, { status: 503 });
+  if (!process.env.RESEND_API_KEY) {
+    return NextResponse.json({ error: "RESEND_API_KEY not configured" }, { status: 503 });
   }
 
   try {
-    const result = await sendEmail({ to, subject, body: email_body, sender });
-
-    if (!result) {
-      return NextResponse.json({ error: "Failed to send" }, { status: 500 });
-    }
+    const result = await sendEmailViaResend({ to, subject, body: email_body, sender });
 
     // Log in database
     const db = getDb();
@@ -39,7 +35,7 @@ export async function POST(req: NextRequest) {
       email_body,
       "dashboard-send",
       today,
-      result.messageId,
+      result.id,
       followupDate,
       from || "isaac",
       today,
@@ -53,7 +49,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, messageId: result.messageId, threadId: result.threadId });
+    return NextResponse.json({ success: true, messageId: result.id });
   } catch (err: unknown) {
     const error = err as { message?: string };
     return NextResponse.json({ error: error.message || "Send failed" }, { status: 500 });
