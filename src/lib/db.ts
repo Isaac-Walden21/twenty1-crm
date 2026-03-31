@@ -86,6 +86,19 @@ function initSchema(db: Database.Database) {
       reason TEXT,
       created_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS email_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email_id TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      recipient TEXT,
+      subject TEXT,
+      sender TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      raw_data TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_email_events_email_id ON email_events(email_id);
+    CREATE INDEX IF NOT EXISTS idx_email_events_type ON email_events(event_type);
   `);
 }
 
@@ -556,6 +569,121 @@ export function updateProspectStatus(id: number, status: string, notes?: string,
       "UPDATE prospects SET status = ?, updated_at = datetime('now') WHERE id = ?"
     ).run(status, id);
   }
+}
+
+export interface EmailEventRow {
+  id: number;
+  email_id: string;
+  event_type: string;
+  recipient: string | null;
+  subject: string | null;
+  sender: string | null;
+  created_at: string;
+}
+
+export function insertEmailEvent(event: {
+  email_id: string;
+  event_type: string;
+  recipient?: string;
+  subject?: string;
+  sender?: string;
+  raw_data?: string;
+}) {
+  const db = getDb();
+  db.prepare(`
+    INSERT INTO email_events (email_id, event_type, recipient, subject, sender, raw_data)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(event.email_id, event.event_type, event.recipient || null, event.subject || null, event.sender || null, event.raw_data || null);
+}
+
+export function getEmailEvents(): EmailEventRow[] {
+  const db = getDb();
+  return db.prepare("SELECT id, email_id, event_type, recipient, subject, sender, created_at FROM email_events ORDER BY created_at DESC").all() as EmailEventRow[];
+}
+
+export function getEmailEventStats() {
+  const db = getDb();
+
+  // Get latest event per email_id (most recent status wins)
+  const latestEvents = db.prepare(`
+    SELECT email_id, event_type, recipient, subject, sender, created_at
+    FROM email_events e1
+    WHERE created_at = (SELECT MAX(created_at) FROM email_events e2 WHERE e2.email_id = e1.email_id)
+    GROUP BY email_id
+  `).all() as EmailEventRow[];
+
+  const total = latestEvents.length;
+  const delivered = latestEvents.filter((e) => e.event_type === "email.delivered").length;
+  const opened = latestEvents.filter((e) => e.event_type === "email.opened").length;
+  const clicked = latestEvents.filter((e) => e.event_type === "email.clicked").length;
+  const bounced = latestEvents.filter((e) => e.event_type === "email.bounced").length;
+  const complained = latestEvents.filter((e) => e.event_type === "email.complained").length;
+
+  const byEvent = new Map<string, number>();
+  for (const e of latestEvents) {
+    const short = e.event_type.replace("email.", "");
+    byEvent.set(short, (byEvent.get(short) || 0) + 1);
+  }
+
+  const bySender = new Map<string, { total: number; delivered: number; opened: number }>();
+  for (const e of latestEvents) {
+    const sender = e.sender || "unknown";
+    const existing = bySender.get(sender) || { total: 0, delivered: 0, opened: 0 };
+    existing.total++;
+    if (["email.delivered", "email.opened", "email.clicked"].includes(e.event_type)) existing.delivered++;
+    if (["email.opened", "email.clicked"].includes(e.event_type)) existing.opened++;
+    bySender.set(sender, existing);
+  }
+
+  const byDate = new Map<string, { total: number; delivered: number; opened: number }>();
+  for (const e of latestEvents) {
+    const date = e.created_at.split("T")[0].split(" ")[0];
+    const existing = byDate.get(date) || { total: 0, delivered: 0, opened: 0 };
+    existing.total++;
+    if (["email.delivered", "email.opened", "email.clicked"].includes(e.event_type)) existing.delivered++;
+    if (["email.opened", "email.clicked"].includes(e.event_type)) existing.opened++;
+    byDate.set(date, existing);
+  }
+
+  const byRecipient = new Map<string, { total: number; last_event: string; last_subject: string }>();
+  for (const e of latestEvents) {
+    const to = e.recipient || "unknown";
+    const existing = byRecipient.get(to);
+    if (!existing) {
+      byRecipient.set(to, { total: 1, last_event: e.event_type.replace("email.", ""), last_subject: e.subject || "" });
+    } else {
+      existing.total++;
+    }
+  }
+
+  const deliveredTotal = delivered + opened + clicked;
+  return {
+    total,
+    delivered,
+    opened,
+    clicked,
+    bounced,
+    complained,
+    deliveryRate: total > 0 ? (deliveredTotal / total * 100) : 0,
+    openRate: deliveredTotal > 0 ? ((opened + clicked) / deliveredTotal * 100) : 0,
+    bounceRate: total > 0 ? (bounced / total * 100) : 0,
+    byEvent: Object.fromEntries(byEvent),
+    bySender: Array.from(bySender.entries()).map(([sender, data]) => ({ sender, ...data })),
+    byDate: Array.from(byDate.entries())
+      .map(([date, data]) => ({ date, ...data }))
+      .sort((a, b) => a.date.localeCompare(b.date)),
+    byRecipient: Array.from(byRecipient.entries())
+      .map(([email, data]) => ({ email, ...data }))
+      .sort((a, b) => b.total - a.total),
+    latestEvents: latestEvents.map((e) => ({
+      id: e.email_id,
+      to: [e.recipient || ""],
+      from: e.sender || "",
+      subject: e.subject || "",
+      created_at: e.created_at,
+      last_event: e.event_type.replace("email.", ""),
+    })),
+  };
 }
 
 export function getRevenueStats() {

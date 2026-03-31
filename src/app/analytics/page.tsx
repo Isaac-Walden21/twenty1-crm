@@ -1,30 +1,19 @@
-import { getResendEmails, getResendDomains, getResendAnalytics, type ResendEmail } from "@/lib/resend";
+import { getResendDomains } from "@/lib/resend";
+import { getEmailEventStats } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export default async function AnalyticsPage() {
-  let emails: ResendEmail[] = [];
   let domains: Awaited<ReturnType<typeof getResendDomains>> = [];
-  let error: string | null = null;
 
   try {
-    [emails, domains] = await Promise.all([getResendEmails(), getResendDomains()]);
-  } catch (e: unknown) {
-    error = (e as { message?: string }).message || "Failed to fetch Resend data";
+    domains = await getResendDomains();
+  } catch {
+    // Domains are optional — continue without them
   }
 
-  if (error) {
-    return (
-      <div className="space-y-6">
-        <h1 className="text-xl sm:text-2xl font-bold">Email Analytics</h1>
-        <div className="bg-red-950/50 border border-red-800 rounded-xl p-6 text-center">
-          <p className="text-red-400">{error}</p>
-        </div>
-      </div>
-    );
-  }
-
-  const analytics = getResendAnalytics(emails);
+  const analytics = getEmailEventStats();
+  const emails = analytics.latestEvents;
 
   return (
     <div className="space-y-6 sm:space-y-8">
