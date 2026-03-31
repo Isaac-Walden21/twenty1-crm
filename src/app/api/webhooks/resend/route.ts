@@ -69,64 +69,62 @@ export async function POST(req: NextRequest) {
 
   const db = getDb();
 
-  // On email.sent — log the email in the emails table (if not already there)
-  if (type === "email.sent") {
-    const sender = extractSenderName(data.from);
-    const sentDate = data.created_at ? data.created_at.split("T")[0] : new Date().toISOString().split("T")[0];
-    const isFollowup = data.subject?.startsWith("Re:") || data.subject?.startsWith("re:");
+  // On ANY event — ensure the email is logged in the emails table and prospect exists
+  // This catches emails sent from any source (Claude, Resend dashboard, API, etc.)
+  const sender = extractSenderName(data.from);
+  const sentDate = data.created_at ? data.created_at.split("T")[0] : new Date().toISOString().split("T")[0];
+  const isFollowup = data.subject?.startsWith("Re:") || data.subject?.startsWith("re:");
 
-    for (const recipient of data.to || []) {
-      // Skip internal emails
-      if (SKIP_EMAILS.includes(recipient.toLowerCase())) continue;
+  for (const recipient of data.to || []) {
+    // Skip internal emails
+    if (SKIP_EMAILS.includes(recipient.toLowerCase())) continue;
 
-      // Check if already logged (e.g. sent from compose form)
-      const existing = db.prepare("SELECT id FROM emails WHERE message_id = ?").get(data.email_id);
-      if (existing) continue;
+    // Check if already logged (e.g. sent from compose form or earlier webhook)
+    const existing = db.prepare("SELECT id FROM emails WHERE message_id = ?").get(data.email_id);
+    if (existing) continue;
 
-      // Find or create prospect
-      let prospectId: number | null = null;
-      const prospect = db.prepare("SELECT id FROM prospects WHERE email = ?").get(recipient.toLowerCase()) as { id: number } | undefined;
+    // Find or create prospect
+    let prospectId: number | null = null;
+    const prospect = db.prepare("SELECT id FROM prospects WHERE email = ?").get(recipient.toLowerCase()) as { id: number } | undefined;
 
-      if (prospect) {
-        prospectId = prospect.id;
-      } else {
-        // Create prospect from the email
-        const vertical = detectVertical(data.subject || "");
-        const bizName = (data.subject || "Unknown")
-          .replace(/^Re:\s*/i, "")
-          .split("—")[0].split("–")[0].trim().substring(0, 80);
+    if (prospect) {
+      prospectId = prospect.id;
+    } else {
+      const vertical = detectVertical(data.subject || "");
+      const bizName = (data.subject || "Unknown")
+        .replace(/^Re:\s*/i, "")
+        .split("—")[0].split("–")[0].trim().substring(0, 80);
 
-        db.prepare(`
-          INSERT OR IGNORE INTO prospects (business_name, email, vertical, status, sent_by, price_estimate)
-          VALUES (?, ?, ?, 'prospected', ?, ?)
-        `).run(bizName, recipient.toLowerCase(), vertical, sender, estimatePrice(vertical));
-
-        const newProspect = db.prepare("SELECT id FROM prospects WHERE email = ?").get(recipient.toLowerCase()) as { id: number } | undefined;
-        prospectId = newProspect?.id || null;
-      }
-
-      // Insert into emails table
-      const followupDate = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
       db.prepare(`
-        INSERT INTO emails (prospect_id, type, subject, body, batch_name, batch_date, message_id, followup_date, sent_by, status, sent_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'sent', ?)
-      `).run(
-        prospectId,
-        isFollowup ? "followup" : "cold",
-        data.subject,
-        null,
-        "resend-webhook",
-        sentDate,
-        data.email_id,
-        isFollowup ? null : followupDate,
-        sender,
-        sentDate,
-      );
+        INSERT OR IGNORE INTO prospects (business_name, email, vertical, status, sent_by, price_estimate)
+        VALUES (?, ?, ?, 'prospected', ?, ?)
+      `).run(bizName, recipient.toLowerCase(), vertical, sender, estimatePrice(vertical));
 
-      // Update prospect status for follow-ups
-      if (isFollowup && prospectId) {
-        db.prepare("UPDATE prospects SET status = 'followed_up', updated_at = datetime('now') WHERE id = ? AND status = 'prospected'").run(prospectId);
-      }
+      const newProspect = db.prepare("SELECT id FROM prospects WHERE email = ?").get(recipient.toLowerCase()) as { id: number } | undefined;
+      prospectId = newProspect?.id || null;
+    }
+
+    // Insert into emails table
+    const followupDate = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    db.prepare(`
+      INSERT INTO emails (prospect_id, type, subject, body, batch_name, batch_date, message_id, followup_date, sent_by, status, sent_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'sent', ?)
+    `).run(
+      prospectId,
+      isFollowup ? "followup" : "cold",
+      data.subject,
+      null,
+      "resend-webhook",
+      sentDate,
+      data.email_id,
+      isFollowup ? null : followupDate,
+      sender,
+      sentDate,
+    );
+
+    // Update prospect status for follow-ups
+    if (isFollowup && prospectId) {
+      db.prepare("UPDATE prospects SET status = 'followed_up', updated_at = datetime('now') WHERE id = ? AND status = 'prospected'").run(prospectId);
     }
   }
 
