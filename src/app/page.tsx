@@ -3,9 +3,8 @@ import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-export default function Dashboard() {
-  const stats = getStats();
-  const revenue = getRevenueStats();
+export default async function Dashboard() {
+  const [stats, revenue] = await Promise.all([getStats(), getRevenueStats()]);
 
   return (
     <div className="space-y-8">

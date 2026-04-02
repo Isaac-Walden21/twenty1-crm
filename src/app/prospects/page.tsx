@@ -10,13 +10,15 @@ export default async function ProspectsPage({
   searchParams: Promise<{ vertical?: string; status?: string; search?: string; sent_by?: string }>;
 }) {
   const params = await searchParams;
-  const prospects = getProspects({
-    vertical: params.vertical,
-    status: params.status,
-    search: params.search,
-    sent_by: params.sent_by,
-  });
-  const stats = getStats();
+  const [prospects, stats] = await Promise.all([
+    getProspects({
+      vertical: params.vertical,
+      status: params.status,
+      search: params.search,
+      sent_by: params.sent_by,
+    }),
+    getStats(),
+  ]);
 
   const verticals = ["Hospitality", "Contractors", "Agriculture", "Firearms/FFL", "Family Services"];
   const statuses = ["prospected", "followed_up", "active_lead", "closed_won", "closed_lost"];

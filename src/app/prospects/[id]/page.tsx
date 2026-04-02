@@ -11,10 +11,10 @@ export default async function ProspectDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const prospect = getProspectById(parseInt(id));
+  const prospect = await getProspectById(parseInt(id));
   if (!prospect) return notFound();
 
-  const thread = getProspectThread(prospect.id);
+  const thread = await getProspectThread(prospect.id);
   const sentCount = thread.filter((m) => m.direction === "sent").length;
   const receivedCount = thread.filter((m) => m.direction === "received").length;
 

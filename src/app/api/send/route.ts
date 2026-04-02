@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendEmail, isGmailConfigured } from "@/lib/gmail";
-import { getDb } from "@/lib/db";
+import { supabase } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -24,32 +24,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Failed to send" }, { status: 500 });
     }
 
-    // Log in database
-    const db = getDb();
     const followupDate = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     const today = new Date().toISOString().split("T")[0];
 
-    db.prepare(`
-      INSERT INTO emails (prospect_id, type, subject, body, batch_name, batch_date, message_id, followup_date, sent_by, status, sent_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'sent', ?)
-    `).run(
-      prospect_id || null,
+    await supabase.from("emails").insert({
+      prospect_id: prospect_id || null,
       type,
       subject,
-      email_body,
-      "dashboard-send",
-      today,
-      result.messageId,
-      followupDate,
-      from || "isaac",
-      today,
-    );
+      body: email_body,
+      batch_name: "dashboard-send",
+      batch_date: today,
+      message_id: result.messageId,
+      followup_date: followupDate,
+      sent_by: sender,
+      status: "sent",
+      sent_at: today,
+    });
 
-    // Update prospect status if needed
     if (prospect_id) {
-      const prospect = db.prepare("SELECT status FROM prospects WHERE id = ?").get(prospect_id) as { status: string } | undefined;
+      const { data: prospect } = await supabase
+        .from("prospects")
+        .select("status")
+        .eq("id", prospect_id)
+        .single();
+
       if (prospect && prospect.status === "prospected" && type === "followup") {
-        db.prepare("UPDATE prospects SET status = 'followed_up', updated_at = datetime('now') WHERE id = ?").run(prospect_id);
+        await supabase
+          .from("prospects")
+          .update({ status: "followed_up", updated_at: new Date().toISOString() })
+          .eq("id", prospect_id);
       }
     }
 

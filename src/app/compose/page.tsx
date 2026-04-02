@@ -10,7 +10,7 @@ export default async function ComposePage({
   searchParams: Promise<{ prospect_id?: string; type?: string }>;
 }) {
   const params = await searchParams;
-  const prospects = getProspects();
+  const prospects = await getProspects();
   const senders = getConfiguredSenders();
   const anySenderReady = senders.some((s) => s.configured);
 

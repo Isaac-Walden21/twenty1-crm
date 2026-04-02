@@ -2,8 +2,8 @@ import { getScorecard } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export default function ScorecardPage() {
-  const sc = getScorecard();
+export default async function ScorecardPage() {
+  const sc = await getScorecard();
   const replyRate = sc.overall.total_prospects_emailed > 0
     ? ((sc.overall.prospects_who_replied / sc.overall.total_prospects_emailed) * 100).toFixed(1)
     : "0";

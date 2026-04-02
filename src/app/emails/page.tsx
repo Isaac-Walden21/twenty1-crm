@@ -9,8 +9,10 @@ export default async function EmailsPage({
   searchParams: Promise<{ type?: string; status?: string; sent_by?: string }>;
 }) {
   const params = await searchParams;
-  const emails = getEmails({ type: params.type, status: params.status, sent_by: params.sent_by });
-  const stats = getStats();
+  const [emails, stats] = await Promise.all([
+    getEmails({ type: params.type, status: params.status, sent_by: params.sent_by }),
+    getStats(),
+  ]);
   const senders = stats.senders as string[];
 
   return (

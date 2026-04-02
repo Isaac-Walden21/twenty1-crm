@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const prospects = getProspects({
+  const prospects = await getProspects({
     vertical: searchParams.get("vertical") || undefined,
     status: searchParams.get("status") || undefined,
     search: searchParams.get("search") || undefined,
@@ -22,6 +22,6 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "id and status required" }, { status: 400 });
   }
 
-  updateProspectStatus(id, status, notes, sale_price);
+  await updateProspectStatus(id, status, notes, sale_price);
   return NextResponse.json({ success: true });
 }
