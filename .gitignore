@@ -4,3 +4,6 @@ data/
 .env
 .env.local
 .vercel
+.claude/
+supabase/
+tsconfig.tsbuildinfo
