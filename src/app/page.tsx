@@ -1,10 +1,12 @@
-import { getStats, getRevenueStats } from "@/lib/db";
+import { getStats, getRevenueStats, getStaleLeads, getMonthlyRevenue, getWeeklySummary } from "@/lib/db";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
-  const [stats, revenue] = await Promise.all([getStats(), getRevenueStats()]);
+  const [stats, revenue, staleLeads, monthlyRevenue, weekly] = await Promise.all([
+    getStats(), getRevenueStats(), getStaleLeads(7), getMonthlyRevenue(), getWeeklySummary(),
+  ]);
 
   return (
     <div className="space-y-8">
@@ -28,6 +30,55 @@ export default async function Dashboard() {
           value={`$${revenue.total.revenue.toLocaleString()}`}
           accent="emerald"
         />
+      </div>
+
+      {/* Monthly Revenue Goal */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">
+            Monthly Goal
+          </h2>
+          <span className="text-xs text-zinc-500">
+            {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+          </span>
+        </div>
+        <div className="flex items-end gap-3 mb-3">
+          <span className="text-3xl font-bold text-white">
+            ${monthlyRevenue.revenue.toLocaleString()}
+          </span>
+          <span className="text-sm text-zinc-500 mb-1">/ $5,000</span>
+        </div>
+        <div className="h-3 bg-zinc-800 rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all ${
+              monthlyRevenue.revenue >= 5000 ? "bg-green-500" :
+              monthlyRevenue.revenue >= 2500 ? "bg-emerald-500" :
+              monthlyRevenue.revenue >= 1000 ? "bg-amber-500" : "bg-zinc-600"
+            }`}
+            style={{ width: `${Math.min(100, (monthlyRevenue.revenue / 5000) * 100)}%` }}
+          />
+        </div>
+        <p className="text-xs text-zinc-500 mt-2">
+          {monthlyRevenue.deals} deal{monthlyRevenue.deals !== 1 ? "s" : ""} closed
+          {monthlyRevenue.revenue >= 5000 ? " -- Goal hit!" : ` -- $${(5000 - monthlyRevenue.revenue).toLocaleString()} to go`}
+        </p>
+      </div>
+
+      {/* Weekly Digest */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+        <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">
+          Last 7 Days
+        </h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <MiniStat label="Emails Sent" value={weekly.emails_sent} />
+          <MiniStat label="Opened" value={weekly.emails_opened} color={weekly.emails_opened > 0 ? "text-amber-400" : undefined} />
+          <MiniStat label="Clicked" value={weekly.emails_clicked} color={weekly.emails_clicked > 0 ? "text-indigo-400" : undefined} />
+          <MiniStat label="Bounced" value={weekly.emails_bounced} color={weekly.emails_bounced > 0 ? "text-red-400" : undefined} />
+          <MiniStat label="New Prospects" value={weekly.new_prospects} />
+          <MiniStat label="Status Changes" value={weekly.status_changes} />
+          <MiniStat label="Deals Closed" value={weekly.deals_closed} color={weekly.deals_closed > 0 ? "text-green-400" : undefined} />
+          <MiniStat label="Revenue" value={`$${weekly.revenue_closed.toLocaleString()}`} color={weekly.revenue_closed > 0 ? "text-green-400" : undefined} />
+        </div>
       </div>
 
       {/* Revenue Tracker */}
@@ -276,6 +327,31 @@ export default async function Dashboard() {
         </div>
       </div>
 
+      {/* Stale Lead Alerts */}
+      {staleLeads.length > 0 && (
+        <div className="bg-zinc-900 border border-amber-900/30 rounded-xl p-6">
+          <h2 className="text-sm font-semibold text-amber-400 uppercase tracking-wider mb-4">
+            Stale Leads -- No Activity in 7+ Days
+          </h2>
+          <div className="space-y-2">
+            {staleLeads.slice(0, 10).map((lead) => (
+              <div key={lead.id} className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Link href={`/prospects/${lead.id}`} className="text-sm font-medium text-white hover:text-emerald-400 truncate">
+                    {lead.business_name}
+                  </Link>
+                  <span className="text-xs text-zinc-500 capitalize">{lead.status.replace(/_/g, " ")}</span>
+                </div>
+                <span className="text-xs text-amber-400 shrink-0">{lead.days_stale}d ago</span>
+              </div>
+            ))}
+          </div>
+          {staleLeads.length > 10 && (
+            <p className="text-xs text-zinc-500 mt-3">{staleLeads.length - 10} more stale leads...</p>
+          )}
+        </div>
+      )}
+
       {/* Quick links */}
       <div className="flex gap-3">
         <Link
@@ -352,4 +428,13 @@ function ResponseDot({ type }: { type: string }) {
     unsubscribe: "bg-red-700",
   };
   return <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${colors[type] || "bg-zinc-500"}`} />;
+}
+
+function MiniStat({ label, value, color }: { label: string; value: string | number; color?: string }) {
+  return (
+    <div>
+      <p className="text-[10px] text-zinc-500 uppercase tracking-wider">{label}</p>
+      <p className={`text-lg font-bold mt-0.5 ${color || "text-white"}`}>{value}</p>
+    </div>
+  );
 }

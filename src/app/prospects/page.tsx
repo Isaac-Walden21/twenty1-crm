@@ -1,6 +1,7 @@
-import { getProspects, getStats } from "@/lib/db";
+import { getProspects, getStats, getEngagementMap, getSavedFilters } from "@/lib/db";
 import Link from "next/link";
 import { StatusUpdater } from "./status-updater";
+import { FilterPresets } from "./filter-presets";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,7 @@ export default async function ProspectsPage({
   searchParams: Promise<{ vertical?: string; status?: string; search?: string; sent_by?: string }>;
 }) {
   const params = await searchParams;
-  const [prospects, stats] = await Promise.all([
+  const [prospects, stats, engagementMap, savedFilters] = await Promise.all([
     getProspects({
       vertical: params.vertical,
       status: params.status,
@@ -18,6 +19,8 @@ export default async function ProspectsPage({
       sent_by: params.sent_by,
     }),
     getStats(),
+    getEngagementMap(),
+    getSavedFilters(),
   ]);
 
   const verticals = ["Hospitality", "Contractors", "Agriculture", "Firearms/FFL", "Family Services"];
@@ -87,6 +90,9 @@ export default async function ProspectsPage({
         </button>
       </form>
 
+      {/* Saved filter presets */}
+      <FilterPresets presets={savedFilters} />
+
       {/* Mobile: Card layout */}
       <div className="sm:hidden space-y-3">
         {prospects.map((p) => (
@@ -108,7 +114,13 @@ export default async function ProspectsPage({
               {p.contact_name && <span className="text-xs text-zinc-500">{p.contact_name}</span>}
             </div>
             <div className="flex items-center justify-between text-xs text-zinc-500">
-              <span>{p.city && p.state ? `${p.city}, ${p.state}` : p.state || ""}</span>
+              <div className="flex items-center gap-2">
+                <span>{p.city && p.state ? `${p.city}, ${p.state}` : p.state || ""}</span>
+                <EngagementBadge
+                  opens={engagementMap.get(p.id)?.opens || 0}
+                  clicks={engagementMap.get(p.id)?.clicks || 0}
+                />
+              </div>
               <div className="flex items-center gap-3">
                 <span>{p.email_count || 0} emails</span>
                 <span className="text-zinc-400">${p.price_estimate?.toLocaleString() || "—"}</span>
@@ -129,6 +141,7 @@ export default async function ProspectsPage({
               <th className="pb-3 font-medium">Vertical</th>
               <th className="pb-3 font-medium">Sender</th>
               <th className="pb-3 font-medium">Status</th>
+              <th className="pb-3 font-medium">Engagement</th>
               <th className="pb-3 font-medium">Emails</th>
               <th className="pb-3 font-medium text-right">Est. Value</th>
             </tr>
@@ -150,6 +163,12 @@ export default async function ProspectsPage({
                 <td className="py-3"><SenderBadge sender={p.sent_by || "isaac"} /></td>
                 <td className="py-3 relative">
                   <StatusUpdater id={p.id} currentStatus={p.status} currentNotes={p.notes || ""} />
+                </td>
+                <td className="py-3">
+                  <EngagementBadge
+                    opens={engagementMap.get(p.id)?.opens || 0}
+                    clicks={engagementMap.get(p.id)?.clicks || 0}
+                  />
                 </td>
                 <td className="py-3 text-zinc-400">
                   {p.email_count || 0}
@@ -205,5 +224,23 @@ function SenderBadge({ sender }: { sender: string }) {
   };
   return (
     <span className={`px-2 py-0.5 rounded text-xs border capitalize ${colors[sender] || "bg-zinc-500/20 text-zinc-300 border-zinc-500/30"}`}>{sender}</span>
+  );
+}
+
+function EngagementBadge({ opens, clicks }: { opens: number; clicks: number }) {
+  if (opens === 0 && clicks === 0) return null;
+  return (
+    <div className="flex items-center gap-1.5">
+      {opens > 0 && (
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">
+          {opens} open{opens !== 1 ? "s" : ""}
+        </span>
+      )}
+      {clicks > 0 && (
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300">
+          {clicks} click{clicks !== 1 ? "s" : ""}
+        </span>
+      )}
+    </div>
   );
 }
