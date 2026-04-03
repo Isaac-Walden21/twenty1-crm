@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/db";
+import { supabase, logActivity } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -129,6 +129,13 @@ export async function POST(req: NextRequest) {
               .eq("id", prospectId)
               .eq("status", "prospected");
           }
+
+          await logActivity(prospectId, type.replace("email.", ""), {
+            subject: data.subject,
+            to: recipientEmail,
+            from: data.from,
+            message_id: data.email_id,
+          });
         } else if (type === "email.delivered") {
           // Update existing email status to delivered
           await supabase
@@ -143,6 +150,11 @@ export async function POST(req: NextRequest) {
         .from("emails")
         .update({ status: "bounced" })
         .eq("message_id", data.email_id);
+
+      await logActivity(null, "bounced", {
+        to: recipientEmail,
+        message_id: data.email_id,
+      });
     } else if (type === "email.complained") {
       // Mark as DNC
       await supabase
@@ -153,6 +165,23 @@ export async function POST(req: NextRequest) {
         .from("prospects")
         .update({ status: "do_not_contact", updated_at: new Date().toISOString() })
         .eq("email", recipientEmail);
+
+      await logActivity(null, "complained", {
+        to: recipientEmail,
+        message_id: data.email_id,
+      });
+    } else if (type === "email.opened" || type === "email.clicked") {
+      // Find prospect by email
+      const { data: prospect } = await supabase
+        .from("prospects")
+        .select("id")
+        .eq("email", recipientEmail)
+        .single();
+
+      await logActivity(prospect?.id || null, type.replace("email.", ""), {
+        to: recipientEmail,
+        message_id: data.email_id,
+      });
     }
 
     return NextResponse.json({ ok: true });

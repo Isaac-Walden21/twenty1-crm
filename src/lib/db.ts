@@ -276,6 +276,12 @@ export async function updateProspectStatus(id: number, status: string, notes?: s
   }
 
   await supabase.from("prospects").update(updates).eq("id", id);
+
+  await logActivity(id, "status_change", {
+    new_status: status,
+    sale_price: salePrice,
+    notes,
+  });
 }
 
 export async function getRevenueStats() {
@@ -298,4 +304,108 @@ export async function getRevenueStats() {
     byMonth: (byMonth || []) as Array<{ month: string; revenue: number; deals: number }>,
     recentDeals: (recentDeals || []) as Array<{ business_name: string; contact_name: string | null; vertical: string; sent_by: string; sale_price: number; closed_at: string }>,
   };
+}
+
+// --- Activity Logging ---
+
+export async function logActivity(
+  prospectId: number | null,
+  eventType: string,
+  eventData: Record<string, unknown> = {}
+) {
+  await supabase.from("activity_log").insert({
+    prospect_id: prospectId,
+    event_type: eventType,
+    event_data: eventData,
+  });
+}
+
+export async function getActivityFeed(limit = 50, offset = 0) {
+  const { data } = await supabase
+    .from("activity_log")
+    .select("*, prospects(business_name, email)")
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  return (data || []) as Array<{
+    id: number;
+    prospect_id: number | null;
+    event_type: string;
+    event_data: Record<string, unknown>;
+    created_at: string;
+    prospects: { business_name: string; email: string } | null;
+  }>;
+}
+
+// --- Engagement Tracking ---
+
+export async function getProspectEngagement(prospectId: number) {
+  const { data } = await supabase.rpc("get_prospect_engagement", { p_id: prospectId });
+  return (data?.[0] || { total_sent: 0, total_opened: 0, total_clicked: 0, last_opened_at: null, last_clicked_at: null }) as {
+    total_sent: number;
+    total_opened: number;
+    total_clicked: number;
+    last_opened_at: string | null;
+    last_clicked_at: string | null;
+  };
+}
+
+export async function getEngagementMap() {
+  const { data } = await supabase.rpc("get_prospects_with_engagement");
+  const map = new Map<number, { opens: number; clicks: number; last_activity: string }>();
+  for (const row of (data || []) as Array<{ prospect_id: number; opens: number; clicks: number; last_activity: string }>) {
+    map.set(row.prospect_id, { opens: row.opens, clicks: row.clicks, last_activity: row.last_activity });
+  }
+  return map;
+}
+
+// --- Stale Leads & Revenue Goals ---
+
+export async function getStaleLeads(daysThreshold = 7) {
+  const { data } = await supabase.rpc("get_stale_leads", { days_threshold: daysThreshold });
+  return (data || []) as Array<{
+    id: number; business_name: string; email: string; vertical: string;
+    status: string; sent_by: string; updated_at: string; days_stale: number;
+  }>;
+}
+
+export async function getMonthlyRevenue(month?: string) {
+  const { data } = await supabase.rpc("get_monthly_revenue", { target_month: month || null });
+  return (data?.[0] || { month: "", revenue: 0, deals: 0 }) as { month: string; revenue: number; deals: number };
+}
+
+// --- Weekly Summary ---
+
+export async function getWeeklySummary() {
+  const { data } = await supabase.rpc("get_weekly_summary");
+  return (data?.[0] || {
+    emails_sent: 0, emails_opened: 0, emails_clicked: 0, emails_bounced: 0,
+    new_prospects: 0, status_changes: 0, deals_closed: 0, revenue_closed: 0,
+  }) as {
+    emails_sent: number; emails_opened: number; emails_clicked: number; emails_bounced: number;
+    new_prospects: number; status_changes: number; deals_closed: number; revenue_closed: number;
+  };
+}
+
+// --- Saved Filters ---
+
+export async function getSavedFilters() {
+  const { data } = await supabase
+    .from("saved_filters")
+    .select("*")
+    .order("created_at", { ascending: false });
+  return (data || []) as Array<{
+    id: number;
+    name: string;
+    filters: Record<string, string>;
+    created_at: string;
+  }>;
+}
+
+export async function createSavedFilter(name: string, filters: Record<string, string>) {
+  await supabase.from("saved_filters").insert({ name, filters });
+}
+
+export async function deleteSavedFilter(id: number) {
+  await supabase.from("saved_filters").delete().eq("id", id);
 }
