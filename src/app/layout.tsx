@@ -24,9 +24,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               {/* Desktop nav */}
               <div className="hidden md:flex gap-1">
                 <NavLink href="/">Dashboard</NavLink>
+                <NavLink href="/pipeline">Pipeline</NavLink>
                 <NavLink href="/prospects">Prospects</NavLink>
                 <NavLink href="/emails">Emails</NavLink>
                 <NavLink href="/scorecard">Scorecard</NavLink>
+                <NavLink href="/activity">Activity</NavLink>
                 <NavLink href="/analytics">Analytics</NavLink>
                 <NavLink href="/compose">Compose</NavLink>
               </div>

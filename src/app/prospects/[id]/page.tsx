@@ -1,4 +1,4 @@
-import { getProspectById, getProspectThread, type ThreadMessage } from "@/lib/db";
+import { getProspectById, getProspectThread, getProspectEngagement, type ThreadMessage } from "@/lib/db";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StatusUpdater } from "../status-updater";
@@ -11,7 +11,10 @@ export default async function ProspectDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const prospect = await getProspectById(parseInt(id));
+  const [prospect, engagement] = await Promise.all([
+    getProspectById(parseInt(id)),
+    getProspectEngagement(parseInt(id)),
+  ]);
   if (!prospect) return notFound();
 
   const thread = await getProspectThread(prospect.id);
@@ -58,11 +61,13 @@ export default async function ProspectDetailPage({
         </div>
 
         {/* Meta */}
-        <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mt-4 pt-4 border-t border-zinc-800">
+        <div className="grid grid-cols-3 sm:grid-cols-7 gap-3 mt-4 pt-4 border-t border-zinc-800">
           <MetaBadge label="Vertical" value={prospect.vertical || "—"} />
           <MetaBadge label="Sender" value={prospect.sent_by || "isaac"} />
           <MetaBadge label="Sent" value={String(sentCount)} />
           <MetaBadge label="Replies" value={String(receivedCount)} />
+          <MetaBadge label="Opens" value={String(engagement.total_opened)} />
+          <MetaBadge label="Clicks" value={String(engagement.total_clicked)} />
           <MetaBadge label="Updated" value={prospect.updated_at?.split("T")[0] || "—"} />
         </div>
 
