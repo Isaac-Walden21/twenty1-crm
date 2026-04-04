@@ -236,33 +236,6 @@ export default async function Dashboard() {
         </div>
       </div>
 
-      {/* Email activity timeline */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-        <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">
-          Email Activity
-        </h2>
-        <div className="flex items-end gap-2 h-32">
-          {(stats.emailsByDate as Array<{ date: string; count: number }>).map((d) => {
-            const maxCount = Math.max(
-              ...(stats.emailsByDate as Array<{ date: string; count: number }>).map((x) => x.count)
-            );
-            const height = Math.max(8, (d.count / maxCount) * 100);
-            return (
-              <div key={d.date} className="flex-1 flex flex-col items-center gap-1">
-                <span className="text-xs text-zinc-500">{d.count}</span>
-                <div
-                  className="w-full bg-blue-500/30 border border-blue-500/50 rounded-sm"
-                  style={{ height: `${height}%` }}
-                />
-                <span className="text-[10px] text-zinc-600">
-                  {new Date(d.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Recent Responses */}
       {(stats.recentResponses as Array<{ id: number; business_name: string; prospect_email: string; response_type: string; summary: string; received_at: string; sent_by: string }>).length > 0 && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
