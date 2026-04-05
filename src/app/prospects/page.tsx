@@ -3,6 +3,7 @@ import Link from "next/link";
 import { StatusUpdater } from "./status-updater";
 import { FilterPresets } from "./filter-presets";
 import { ExpandableThread } from "./expandable-thread";
+import { ProspectTable } from "./prospect-table";
 
 export const dynamic = "force-dynamic";
 
@@ -124,59 +125,33 @@ export default async function ProspectsPage({
               </div>
               <span className="text-zinc-400">${p.price_estimate?.toLocaleString() || "—"}</span>
             </div>
-            <ExpandableThread prospectId={p.id} emailCount={p.email_count || 0} />
+            <ExpandableThread prospectId={p.id} emailCount={p.email_count || 0} businessName={p.business_name} />
           </div>
         ))}
       </div>
 
       {/* Desktop: Table layout */}
       <div className="hidden sm:block overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-zinc-800 text-zinc-500 text-left">
-              <th className="pb-3 font-medium">Business</th>
-              <th className="pb-3 font-medium">Contact</th>
-              <th className="pb-3 font-medium">Location</th>
-              <th className="pb-3 font-medium">Vertical</th>
-              <th className="pb-3 font-medium">Sender</th>
-              <th className="pb-3 font-medium">Status</th>
-              <th className="pb-3 font-medium">Engagement</th>
-              <th className="pb-3 font-medium">Emails</th>
-              <th className="pb-3 font-medium text-right">Est. Value</th>
-            </tr>
-          </thead>
-          <tbody>
-            {prospects.map((p) => (
-              <tr key={p.id} className="border-b border-zinc-800/50 hover:bg-zinc-900/50">
-                <td className="py-3">
-                  <Link href={`/prospects/${p.id}`} className="font-medium text-white hover:text-emerald-400 transition-colors">
-                    {p.business_name}
-                  </Link>
-                  <div className="text-xs text-zinc-500">{p.email}</div>
-                </td>
-                <td className="py-3 text-zinc-400">{p.contact_name || "Unknown"}</td>
-                <td className="py-3 text-zinc-400">
-                  {p.city && p.state ? `${p.city}, ${p.state}` : p.state || "—"}
-                </td>
-                <td className="py-3"><VerticalBadge vertical={p.vertical || "Other"} /></td>
-                <td className="py-3"><SenderBadge sender={p.sent_by || "isaac"} /></td>
-                <td className="py-3 relative">
-                  <StatusUpdater id={p.id} currentStatus={p.status} currentNotes={p.notes || ""} />
-                </td>
-                <td className="py-3">
-                  <EngagementBadge
-                    opens={engagementMap.get(p.id)?.opens || 0}
-                    clicks={engagementMap.get(p.id)?.clicks || 0}
-                  />
-                </td>
-                <td className="py-3">
-                  <ExpandableThread prospectId={p.id} emailCount={p.email_count || 0} />
-                </td>
-                <td className="py-3 text-right text-zinc-400">${p.price_estimate?.toLocaleString() || "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <ProspectTable
+          prospects={prospects.map((p) => ({
+            id: p.id,
+            business_name: p.business_name,
+            contact_name: p.contact_name,
+            email: p.email,
+            city: p.city,
+            state: p.state,
+            vertical: p.vertical,
+            status: p.status,
+            sent_by: p.sent_by,
+            notes: p.notes,
+            email_count: p.email_count || 0,
+            last_email_date: p.last_email_date || null,
+            price_estimate: p.price_estimate,
+          }))}
+          engagementData={Object.fromEntries(
+            prospects.map((p) => [p.id, engagementMap.get(p.id) || { opens: 0, clicks: 0 }])
+          )}
+        />
       </div>
 
       {prospects.length === 0 && (

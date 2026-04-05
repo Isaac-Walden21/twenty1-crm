@@ -1,0 +1,166 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { StatusUpdater } from "./status-updater";
+import { ThreadToggle, ThreadPanel } from "./expandable-thread";
+
+type Prospect = {
+  id: number;
+  business_name: string;
+  contact_name: string | null;
+  email: string | null;
+  city: string | null;
+  state: string | null;
+  vertical: string | null;
+  status: string;
+  sent_by: string | null;
+  notes: string | null;
+  email_count: number;
+  last_email_date: string | null;
+  price_estimate: number | null;
+};
+
+type Engagement = {
+  opens: number;
+  clicks: number;
+};
+
+export function ProspectTable({
+  prospects,
+  engagementData,
+}: {
+  prospects: Prospect[];
+  engagementData: Record<number, Engagement>;
+}) {
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+
+  return (
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="border-b border-zinc-800 text-zinc-500 text-left">
+          <th className="pb-3 font-medium">Business</th>
+          <th className="pb-3 font-medium">Contact</th>
+          <th className="pb-3 font-medium">Location</th>
+          <th className="pb-3 font-medium">Vertical</th>
+          <th className="pb-3 font-medium">Sender</th>
+          <th className="pb-3 font-medium">Status</th>
+          <th className="pb-3 font-medium">Engagement</th>
+          <th className="pb-3 font-medium">Emails</th>
+          <th className="pb-3 font-medium text-right">Est. Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        {prospects.map((p) => {
+          const isExpanded = expandedId === p.id;
+          const engagement = engagementData[p.id] || { opens: 0, clicks: 0 };
+
+          return (
+            <ProspectRow
+              key={p.id}
+              prospect={p}
+              engagement={engagement}
+              isExpanded={isExpanded}
+              onToggle={() => setExpandedId(isExpanded ? null : p.id)}
+            />
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+function ProspectRow({
+  prospect: p,
+  engagement,
+  isExpanded,
+  onToggle,
+}: {
+  prospect: Prospect;
+  engagement: Engagement;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <>
+      <tr className={`border-b border-zinc-800/50 hover:bg-zinc-900/50 ${isExpanded ? "bg-zinc-900/50" : ""}`}>
+        <td className="py-3">
+          <Link href={`/prospects/${p.id}`} className="font-medium text-white hover:text-emerald-400 transition-colors">
+            {p.business_name}
+          </Link>
+          <div className="text-xs text-zinc-500">{p.email}</div>
+        </td>
+        <td className="py-3 text-zinc-400">{p.contact_name || "Unknown"}</td>
+        <td className="py-3 text-zinc-400">
+          {p.city && p.state ? `${p.city}, ${p.state}` : p.state || "---"}
+        </td>
+        <td className="py-3"><VerticalBadge vertical={p.vertical || "Other"} /></td>
+        <td className="py-3"><SenderBadge sender={p.sent_by || "isaac"} /></td>
+        <td className="py-3 relative">
+          <StatusUpdater id={p.id} currentStatus={p.status} currentNotes={p.notes || ""} />
+        </td>
+        <td className="py-3">
+          <EngagementBadge opens={engagement.opens} clicks={engagement.clicks} />
+        </td>
+        <td className="py-3">
+          <ThreadToggle
+            prospectId={p.id}
+            emailCount={p.email_count || 0}
+            isOpen={isExpanded}
+            onToggle={onToggle}
+          />
+        </td>
+        <td className="py-3 text-right text-zinc-400">${p.price_estimate?.toLocaleString() || "---"}</td>
+      </tr>
+      {isExpanded && (
+        <tr>
+          <td colSpan={9} className="p-0 bg-zinc-950 border-b border-zinc-800">
+            <ThreadPanel prospectId={p.id} businessName={p.business_name} />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function VerticalBadge({ vertical }: { vertical: string }) {
+  const colors: Record<string, string> = {
+    Hospitality: "bg-blue-500/20 text-blue-300 border-blue-500/30",
+    Contractors: "bg-orange-500/20 text-orange-300 border-orange-500/30",
+    Agriculture: "bg-green-500/20 text-green-300 border-green-500/30",
+    "Firearms/FFL": "bg-red-500/20 text-red-300 border-red-500/30",
+    "Family Services": "bg-purple-500/20 text-purple-300 border-purple-500/30",
+    Other: "bg-zinc-500/20 text-zinc-300 border-zinc-500/30",
+  };
+  return (
+    <span className={`px-2 py-0.5 rounded text-xs border ${colors[vertical] || colors.Other}`}>{vertical}</span>
+  );
+}
+
+function SenderBadge({ sender }: { sender: string }) {
+  const colors: Record<string, string> = {
+    isaac: "bg-indigo-500/20 text-indigo-300 border-indigo-500/30",
+    asher: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30",
+  };
+  return (
+    <span className={`px-2 py-0.5 rounded text-xs border capitalize ${colors[sender] || "bg-zinc-500/20 text-zinc-300 border-zinc-500/30"}`}>{sender}</span>
+  );
+}
+
+function EngagementBadge({ opens, clicks }: { opens: number; clicks: number }) {
+  if (opens === 0 && clicks === 0) return null;
+  return (
+    <div className="flex items-center gap-1.5">
+      {opens > 0 && (
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">
+          {opens} open{opens !== 1 ? "s" : ""}
+        </span>
+      )}
+      {clicks > 0 && (
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300">
+          {clicks} click{clicks !== 1 ? "s" : ""}
+        </span>
+      )}
+    </div>
+  );
+}
