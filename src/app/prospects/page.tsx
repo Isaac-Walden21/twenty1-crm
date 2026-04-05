@@ -2,6 +2,7 @@ import { getProspects, getStats, getEngagementMap, getSavedFilters } from "@/lib
 import Link from "next/link";
 import { StatusUpdater } from "./status-updater";
 import { FilterPresets } from "./filter-presets";
+import { ExpandableThread } from "./expandable-thread";
 
 export const dynamic = "force-dynamic";
 
@@ -121,11 +122,9 @@ export default async function ProspectsPage({
                   clicks={engagementMap.get(p.id)?.clicks || 0}
                 />
               </div>
-              <div className="flex items-center gap-3">
-                <span>{p.email_count || 0} emails</span>
-                <span className="text-zinc-400">${p.price_estimate?.toLocaleString() || "—"}</span>
-              </div>
+              <span className="text-zinc-400">${p.price_estimate?.toLocaleString() || "—"}</span>
             </div>
+            <ExpandableThread prospectId={p.id} emailCount={p.email_count || 0} />
           </div>
         ))}
       </div>
@@ -170,11 +169,8 @@ export default async function ProspectsPage({
                     clicks={engagementMap.get(p.id)?.clicks || 0}
                   />
                 </td>
-                <td className="py-3 text-zinc-400">
-                  {p.email_count || 0}
-                  {p.last_email_date && (
-                    <span className="text-xs text-zinc-600 ml-1">({p.last_email_date})</span>
-                  )}
+                <td className="py-3">
+                  <ExpandableThread prospectId={p.id} emailCount={p.email_count || 0} />
                 </td>
                 <td className="py-3 text-right text-zinc-400">${p.price_estimate?.toLocaleString() || "—"}</td>
               </tr>
