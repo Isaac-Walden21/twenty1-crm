@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Resend } from "resend";
 import { supabase, logActivity } from "@/lib/db";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export const dynamic = "force-dynamic";
 
@@ -109,10 +112,20 @@ export async function POST(req: NextRequest) {
 
           const emailType = (count && count > 0) ? "followup" : "cold";
 
+          // Fetch full email content from Resend
+          let emailBody: string | null = null;
+          try {
+            const detail = await resend.emails.get(data.email_id);
+            emailBody = detail.data?.html || detail.data?.text || null;
+          } catch {
+            // Non-critical — continue without body
+          }
+
           await supabase.from("emails").insert({
             prospect_id: prospectId,
             type: emailType,
             subject: data.subject,
+            body: emailBody,
             batch_name: "resend-webhook",
             batch_date: sendDate,
             message_id: data.email_id,
