@@ -5,6 +5,7 @@ import { useState } from "react";
 
 const STATUSES = [
   { value: "prospected", label: "Prospected", color: "bg-zinc-500/20 text-zinc-300" },
+  { value: "cold_sent", label: "Cold Sent", color: "bg-sky-500/20 text-sky-300" },
   { value: "followed_up", label: "Followed Up", color: "bg-blue-500/20 text-blue-300" },
   { value: "active_lead", label: "Active Lead", color: "bg-emerald-500/20 text-emerald-300" },
   { value: "negotiating", label: "Negotiating", color: "bg-amber-500/20 text-amber-300" },

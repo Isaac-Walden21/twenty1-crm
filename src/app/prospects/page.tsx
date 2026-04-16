@@ -42,7 +42,7 @@ export default async function ProspectsPage({
   });
 
   const verticals = ["Hospitality", "Contractors", "Agriculture", "Firearms/FFL", "Family Services"];
-  const statuses = ["prospected", "followed_up", "active_lead", "closed_won", "closed_lost"];
+  const statuses = ["prospected", "cold_sent", "followed_up", "active_lead", "closed_won", "closed_lost"];
   const senders = stats.senders as string[];
 
   return (
