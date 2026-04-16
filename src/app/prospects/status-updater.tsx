@@ -38,6 +38,7 @@ export function StatusUpdater({
       return;
     }
 
+    const scrollY = window.scrollY;
     setSaving(true);
     await fetch("/api/prospects", {
       method: "PATCH",
@@ -53,6 +54,15 @@ export function StatusUpdater({
     setOpen(false);
     setPendingStatus(null);
     router.refresh();
+
+    // router.refresh() re-mounts the server component and resets scroll.
+    // Restore the previous position on the next two frames so the restoration
+    // runs after React has committed the refreshed tree.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.scrollTo(0, scrollY);
+      });
+    });
   }
 
   if (!open) {
