@@ -69,13 +69,14 @@ export interface ApolloSearchResponse {
   };
 }
 
-// --- Search: US fishing lodges, owner/GM titles, small team ---
+// --- Search: US fishing/hunting lodges, owner-operator titles, micro teams ---
 
 export interface LodgeSearchParams {
   page?: number;
   perPage?: number;
-  keywords?: string; // default: "fishing lodge"
-  titles?: string[]; // default: owner / general manager / president
+  keywords?: string;
+  titles?: string[];
+  employeeRanges?: string[];
 }
 
 export async function searchLodgeDecisionMakers(
@@ -84,30 +85,24 @@ export async function searchLodgeDecisionMakers(
   const {
     page = 1,
     perPage = 25,
-    keywords = "fishing lodge",
-    titles = ["owner", "general manager", "president", "founder", "proprietor"],
+    keywords = '"fishing lodge" OR "hunting lodge" OR "fishing resort" OR "hunting resort"',
+    titles = ["owner", "founder", "proprietor"],
+    employeeRanges = ["1,10"],
   } = params;
 
-  // Try /people/search first (available on Basic), fall back to /mixed_people/search
+  const body = {
+    q_keywords: keywords,
+    person_titles: titles,
+    person_locations: ["United States"],
+    organization_num_employees_ranges: employeeRanges,
+    page,
+    per_page: perPage,
+  };
+
   try {
-    return await apolloPost<ApolloSearchResponse>("/people/search", {
-      q_keywords: keywords,
-      person_titles: titles,
-      person_locations: ["United States"],
-      organization_num_employees_ranges: ["1,10", "11,20", "21,50"],
-      page,
-      per_page: perPage,
-    });
+    return await apolloPost<ApolloSearchResponse>("/people/search", body);
   } catch (e) {
-    // If /people/search also fails, try /mixed_people/search as fallback
-    return apolloPost<ApolloSearchResponse>("/mixed_people/search", {
-      q_keywords: keywords,
-      person_titles: titles,
-      person_locations: ["United States"],
-      organization_num_employees_ranges: ["1,10", "11,20", "21,50"],
-      page,
-      per_page: perPage,
-    });
+    return apolloPost<ApolloSearchResponse>("/mixed_people/search", body);
   }
 }
 

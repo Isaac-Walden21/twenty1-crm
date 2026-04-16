@@ -13,7 +13,7 @@ export default async function ProspectsPage({
   searchParams: Promise<{ vertical?: string; status?: string; search?: string; sent_by?: string }>;
 }) {
   const params = await searchParams;
-  const [prospects, stats, engagementMap, savedFilters] = await Promise.all([
+  const [rawProspects, stats, engagementMap, savedFilters] = await Promise.all([
     getProspects({
       vertical: params.vertical,
       status: params.status,
@@ -24,6 +24,22 @@ export default async function ProspectsPage({
     getEngagementMap(),
     getSavedFilters(),
   ]);
+
+  // Sort priority leads (bad-platform sites) to the top.
+  // Priority flag lives in notes.priority (set by import-apollo-csv when a Wix/Squarespace/etc site is detected).
+  function isPriority(notes: string | null): boolean {
+    if (!notes) return false;
+    try {
+      return JSON.parse(notes).priority === true;
+    } catch {
+      return false;
+    }
+  }
+  const prospects = [...rawProspects].sort((a, b) => {
+    const aPri = isPriority(a.notes) ? 1 : 0;
+    const bPri = isPriority(b.notes) ? 1 : 0;
+    return bPri - aPri;
+  });
 
   const verticals = ["Hospitality", "Contractors", "Agriculture", "Firearms/FFL", "Family Services"];
   const statuses = ["prospected", "followed_up", "active_lead", "closed_won", "closed_lost"];

@@ -87,17 +87,31 @@ function ProspectRow({
   const [drafting, setDrafting] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  const parsedNotes = (() => {
+    try {
+      return JSON.parse(p.notes || "{}") as {
+        website?: string;
+        priority?: boolean;
+        priority_reason?: string;
+        detected_platforms?: string[];
+      };
+    } catch {
+      return {};
+    }
+  })();
+
+  const isPriority = parsedNotes.priority === true;
+
   function handleCopyPrompt() {
     const name = p.contact_name || "the owner";
     const biz = p.business_name;
     const location = [p.city, p.state].filter(Boolean).join(", ") || "unknown location";
-    let website = "";
-    try {
-      const notes = JSON.parse(p.notes || "{}");
-      website = notes.website || "";
-    } catch {}
+    const website = parsedNotes.website || "";
+    const priorityHint = isPriority && parsedNotes.priority_reason
+      ? ` (${parsedNotes.priority_reason}, so lead with the bad-website hook per L0-20)`
+      : "";
 
-    const prompt = `use cold-email to draft an email to ${name} at ${biz} in ${location}${website ? `, website is ${website}` : ""}`;
+    const prompt = `use cold-email to draft an email to ${name} at ${biz} in ${location}${website ? `, website is ${website}` : ""}${priorityHint}`;
 
     navigator.clipboard.writeText(prompt).then(() => {
       setCopied(true);
@@ -133,9 +147,12 @@ function ProspectRow({
     <>
       <tr className={`border-b border-zinc-800/50 hover:bg-zinc-900/50 ${isExpanded ? "bg-zinc-900/50" : ""}`}>
         <td className="py-3">
-          <Link href={`/prospects/${p.id}`} className="font-medium text-white hover:text-emerald-400 transition-colors">
-            {p.business_name}
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href={`/prospects/${p.id}`} className="font-medium text-white hover:text-emerald-400 transition-colors">
+              {p.business_name}
+            </Link>
+            {isPriority && <PriorityBadge reason={parsedNotes.priority_reason} />}
+          </div>
           <div className="text-xs text-zinc-500">{p.email}</div>
         </td>
         <td className="py-3 text-zinc-400">{p.contact_name || "Unknown"}</td>
@@ -209,6 +226,17 @@ function SenderBadge({ sender }: { sender: string }) {
   };
   return (
     <span className={`px-2 py-0.5 rounded text-xs border capitalize ${colors[sender] || "bg-zinc-500/20 text-zinc-300 border-zinc-500/30"}`}>{sender}</span>
+  );
+}
+
+function PriorityBadge({ reason }: { reason?: string }) {
+  return (
+    <span
+      title={reason || "Priority lead"}
+      className="px-1.5 py-0.5 rounded text-[10px] font-medium border bg-amber-500/20 text-amber-300 border-amber-500/40 uppercase tracking-wide"
+    >
+      Priority
+    </span>
   );
 }
 

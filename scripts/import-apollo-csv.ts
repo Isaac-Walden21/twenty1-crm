@@ -42,6 +42,18 @@ const BOOKING_SIGNATURES: Record<string, string[]> = {
   streamline: ["streamlinevrs.com"],
 };
 
+// Website platforms that signal a prospect ripe for a rebuild.
+// When detected, the lead gets flagged priority=true in notes.
+const PLATFORM_SIGNATURES: Record<string, string[]> = {
+  wix: ["wix.com", "static.wixstatic.com", "wixsite.com", "_wixcssmodules"],
+  squarespace: ["squarespace.com", "squarespace-cdn.com", "static1.squarespace"],
+  godaddy: ["godaddy.com/websites", "secureserver.net", "website-builder"],
+  weebly: ["weebly.com", "weeblysite.com"],
+  wordpress_com: ["wp.com", "wordpress.com/hosting", "en-wpcom"],
+  // Generic WordPress (not .com hosted) — broad, usually fine to rebuild
+  wordpress_generic: ["wp-content/themes", "wp-includes/"],
+};
+
 // --- Parse args ---
 
 const args = process.argv.slice(2);
@@ -121,9 +133,14 @@ function parseCSVLine(line: string): string[] {
 
 // --- Website check ---
 
-async function checkForBookingWidget(
-  url: string
-): Promise<{ detected: boolean; widgets: string[]; error?: string }> {
+interface WebsiteCheck {
+  widgetDetected: boolean;
+  widgets: string[];
+  platforms: string[];
+  error?: string;
+}
+
+async function checkWebsite(url: string): Promise<WebsiteCheck> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 12000);
@@ -136,16 +153,21 @@ async function checkForBookingWidget(
     clearTimeout(timeout);
 
     const html = (await res.text()).toLowerCase();
-    const detected: string[] = [];
+    const widgets: string[] = [];
+    const platforms: string[] = [];
 
     for (const [name, needles] of Object.entries(BOOKING_SIGNATURES)) {
-      if (needles.some((n) => html.includes(n))) detected.push(name);
+      if (needles.some((n) => html.includes(n))) widgets.push(name);
     }
 
-    return { detected: detected.length > 0, widgets: detected };
+    for (const [name, needles] of Object.entries(PLATFORM_SIGNATURES)) {
+      if (needles.some((n) => html.includes(n))) platforms.push(name);
+    }
+
+    return { widgetDetected: widgets.length > 0, widgets, platforms };
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
-    return { detected: false, widgets: [], error: msg };
+    return { widgetDetected: false, widgets: [], platforms: [], error: msg };
   }
 }
 
@@ -174,6 +196,7 @@ async function main() {
 
   const results = {
     imported: 0,
+    priority: 0,
     skipped_existing: 0,
     skipped_no_email: 0,
     skipped_has_widget: 0,
@@ -205,17 +228,19 @@ async function main() {
     }
     existingSet.add(email); // dedupe within batch
 
-    // Check website for booking widgets
+    // Check website for booking widgets AND target platforms
     let widgetDetected = false;
     let detectedWidgets: string[] = [];
+    let detectedPlatforms: string[] = [];
     let fetchError: string | undefined;
 
     if (!skipCheck && website) {
       const url = website.startsWith("http") ? website : `https://${website}`;
       process.stdout.write(`  Checking ${businessName} (${url})... `);
-      const result = await checkForBookingWidget(url);
-      widgetDetected = result.detected;
+      const result = await checkWebsite(url);
+      widgetDetected = result.widgetDetected;
       detectedWidgets = result.widgets;
+      detectedPlatforms = result.platforms;
       fetchError = result.error;
 
       if (widgetDetected) {
@@ -226,15 +251,23 @@ async function main() {
         console.log(`FETCH ERROR: ${fetchError}`);
         results.skipped_fetch_error++;
         continue;
+      } else if (detectedPlatforms.length > 0) {
+        console.log(`PRIORITY — ${detectedPlatforms.join(", ")}`);
+        results.priority++;
       } else {
         console.log("QUALIFIED");
       }
     }
 
+    const isPriority = detectedPlatforms.length > 0;
+
     const notesJson = JSON.stringify({
       website: website || null,
       booking_widget_detected: widgetDetected,
       detected_widgets: detectedWidgets,
+      detected_platforms: detectedPlatforms,
+      priority: isPriority,
+      priority_reason: isPriority ? `Site on ${detectedPlatforms.join(", ")}` : null,
       personalization_line: null,
       source: "apollo-csv",
       title,
@@ -258,6 +291,7 @@ async function main() {
   console.log(`\n${"=".repeat(60)}`);
   console.log(`Total processed: ${results.total}`);
   console.log(`Qualified to import: ${toInsert.length}`);
+  console.log(`  of which PRIORITY (bad-platform sites): ${results.priority}`);
   console.log(`Skipped (already in CRM): ${results.skipped_existing}`);
   console.log(`Skipped (no email): ${results.skipped_no_email}`);
   console.log(`Skipped (has booking widget): ${results.skipped_has_widget}`);

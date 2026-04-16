@@ -21,7 +21,7 @@ ABSOLUTE RULES (non-negotiable):
 BANNED WORDS: leverage, streamline, empower, unlock, elevate, seamless, robust, cutting-edge, delve, landscape, realm, synergy, bandwidth, game-changer, revolutionize, innovative, Furthermore, Moreover, Additionally, "I hope this finds you well", "I wanted to reach out", "I came across your".
 
 4-STEP FRAMEWORK:
-1. Personalization (1-2 sentences): specific observation about their lodge + voluntary disclosure about Isaac (bass fisherman in Indiana, SWAT cop, runs Twenty1 Media with his brother)
+1. Personalization (1-2 sentences): specific observation about their business + voluntary disclosure about Isaac (bass fisherman in Indiana, SWAT cop, runs Twenty1 Media with his brother). If a PRIORITY SIGNAL is included in the user prompt (prospect's site is on Wix/Squarespace/GoDaddy/WordPress), lead with that hook instead — per Lesson L0-20, the "bad website" opener converts harder than voluntary disclosure alone. Name the platform directly.
 2. Who am I (1-2 sentences): "I'm Isaac, I run Twenty1 Media" + one named client (Waterway Inn, Papin's Resort, IVR906)
 3. Offer (1-2 sentences): "I'll build you [specific deliverable] in [14 days]. You don't pay until it's live in your hands." The guarantee is about the BUILD, never about results/bookings.
 4. CTA (1 sentence): specific day/time for a quick call. Never "let me know" or "would you be interested?"
@@ -69,6 +69,16 @@ export async function POST(req: NextRequest) {
 
   const website = notes.website || prospect.website_notes || "";
   const personalizationLine = notes.personalization_line || "";
+  const isPriority = notes.priority === true;
+  const priorityReason = (notes.priority_reason as string) || "";
+  const detectedPlatforms = Array.isArray(notes.detected_platforms)
+    ? (notes.detected_platforms as string[]).join(", ")
+    : "";
+
+  const priorityBlock = isPriority
+    ? `\nPRIORITY SIGNAL: ${priorityReason}${detectedPlatforms ? ` (platforms detected: ${detectedPlatforms})` : ""}
+=> Lead the opener with the bad-website hook. Name the platform directly. Example pattern: "Saw your site is on ${detectedPlatforms || "[platform]"} and it shows. You're competing against operators with professional sites and a ${detectedPlatforms || "[platform]"} template puts you at a disadvantage right off the bat."`
+    : "";
 
   const userPrompt = `Write a cold email to:
 Name: ${prospect.contact_name || "the owner"}
@@ -76,7 +86,7 @@ Business: ${prospect.business_name}
 Location: ${[prospect.city, prospect.state].filter(Boolean).join(", ") || "unknown"}
 Website: ${website}
 Existing personalization note: ${personalizationLine}
-Industry keywords: ${notes.title || ""}
+Industry keywords: ${notes.title || ""}${priorityBlock}
 
 Output ONLY the email. Subject line first, then body, then "— Isaac".`;
 
