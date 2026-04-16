@@ -5,5 +5,7 @@ data/
 .env.local
 .vercel
 .claude/
+!.claude/skills/
 supabase/
 tsconfig.tsbuildinfo
+logs/

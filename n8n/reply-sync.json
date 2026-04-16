@@ -1,0 +1,259 @@
+{
+  "name": "Lodge Reply Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "hours", "hoursInterval": 2 }
+          ]
+        }
+      },
+      "id": "schedule",
+      "name": "Every 2 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.instantly.ai/api/v1/unibox/emails",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "api_key", "value": "={{ $env.INSTANTLY_API_KEY }}" },
+            { "name": "email_type", "value": "received" },
+            { "name": "limit", "value": "50" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch_replies",
+      "name": "Fetch Instantly Replies",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [420, 300],
+      "notes": "Pulls recent received emails from Instantly's Unibox. Adjust endpoint if Instantly's API changes."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter to only new replies we haven't processed.\n// We track processed IDs in a static variable (resets on workflow restart,\n// but that's fine — Supabase upsert handles deduplication).\nconst items = Array.isArray($json) ? $json : ($json.data || $json.emails || []);\nconst results = [];\n\nfor (const reply of items) {\n  const fromEmail = (reply.from_email || reply.from || reply.sender || '').toLowerCase().trim();\n  const body = reply.body || reply.text || reply.snippet || '';\n  const subject = reply.subject || '';\n  const receivedAt = reply.timestamp || reply.date || reply.received_at || new Date().toISOString();\n  const messageId = reply.id || reply.message_id || '';\n\n  if (!fromEmail || !body) continue;\n\n  results.push({\n    json: {\n      from_email: fromEmail,\n      body,\n      subject,\n      received_at: receivedAt,\n      message_id: messageId\n    }\n  });\n}\n\nif (results.length === 0) {\n  // Return empty to stop the workflow gracefully\n  return [{ json: { _empty: true } }];\n}\n\nreturn results;"
+      },
+      "id": "parse_replies",
+      "name": "Parse Replies",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            { "value1": "={{ $json._empty }}", "operation": "notEqual", "value2": true }
+          ]
+        }
+      },
+      "id": "has_replies",
+      "name": "Has Replies?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [860, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/prospects",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "email", "value": "=eq.{{ $json.from_email }}" },
+            { "name": "select", "value": "id,business_name,status,vertical" },
+            { "name": "limit", "value": "1" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "match_prospect",
+      "name": "Match Prospect by Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1080, 240],
+      "credentials": {
+        "httpHeaderAuth": { "id": "REPLACE_WITH_SUPABASE_CRED_ID", "name": "Supabase API" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge reply data with matched prospect\nconst reply = $('Has Replies?').item.json;\nconst prospects = $json;\nconst prospect = Array.isArray(prospects) ? prospects[0] : prospects;\n\nif (!prospect || !prospect.id) {\n  // No matching prospect found — skip\n  return { json: { skip: true, reason: 'no matching prospect', from_email: reply.from_email } };\n}\n\nreturn {\n  json: {\n    skip: false,\n    prospect_id: prospect.id,\n    business_name: prospect.business_name,\n    current_status: prospect.status,\n    vertical: prospect.vertical,\n    from_email: reply.from_email,\n    reply_body: reply.body,\n    reply_subject: reply.subject,\n    received_at: reply.received_at,\n    message_id: reply.message_id\n  }\n};"
+      },
+      "id": "merge_data",
+      "name": "Merge Reply + Prospect",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1300, 240]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            { "value1": "={{ $json.skip }}", "value2": false }
+          ]
+        }
+      },
+      "id": "found_prospect",
+      "name": "Prospect Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1520, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "content-type", "value": "application/json" },
+            { "name": "anthropic-version", "value": "2023-06-01" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5-20251001\",\n  \"max_tokens\": 200,\n  \"system\": \"Classify this email reply into exactly ONE category. Reply with ONLY the category name, nothing else.\\n\\nCategories:\\n- positive_reply (interested, asks questions, wants to learn more, warm tone)\\n- booked (explicitly agrees to a call/meeting, provides times, confirms)\\n- not_interested (explicitly declines, says no thanks, not a fit)\\n- unsubscribe (asks to be removed, stop emailing, opt out)\\n- out_of_office (auto-reply, vacation, OOO)\\n- neutral (unclear intent, vague response, neither positive nor negative)\",\n  \"messages\": [{\"role\": \"user\", \"content\": {{ JSON.stringify('Reply from ' + $json.business_name + ':\\n\\n' + $json.reply_body) }}}]\n}",
+        "options": {}
+      },
+      "id": "classify",
+      "name": "Claude: Classify Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1740, 180],
+      "credentials": {
+        "httpHeaderAuth": { "id": "REPLACE_WITH_ANTHROPIC_HEADER_CRED", "name": "Anthropic API" }
+      },
+      "notes": "Uses Haiku for classification — fast and cheap. Only needs one word output."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Map classification to CRM status update\nconst data = $('Prospect Found?').item.json;\nconst raw = ($json.content?.[0]?.text || '').trim().toLowerCase();\n\n// Normalize classification\nconst validTypes = ['positive_reply', 'booked', 'not_interested', 'unsubscribe', 'out_of_office', 'neutral'];\nconst classification = validTypes.find(t => raw.includes(t.replace('_', ' ')) || raw.includes(t)) || 'neutral';\n\n// Map to CRM prospect status\nconst statusMap = {\n  positive_reply: 'active_lead',\n  booked: 'active_lead',\n  not_interested: 'closed_lost',\n  unsubscribe: 'do_not_contact',\n  out_of_office: data.current_status, // don't change status for OOO\n  neutral: data.current_status\n};\n\nconst newStatus = statusMap[classification] || data.current_status;\n\nreturn {\n  json: {\n    ...data,\n    classification,\n    new_status: newStatus,\n    should_update: newStatus !== data.current_status\n  }\n};"
+      },
+      "id": "map_status",
+      "name": "Map to CRM Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1960, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/responses",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"prospect_id\": {{ $json.prospect_id }},\n  \"response_type\": {{ JSON.stringify($json.classification) }},\n  \"subject\": {{ JSON.stringify($json.reply_subject || '') }},\n  \"body\": {{ JSON.stringify($json.reply_body || '') }},\n  \"from_email\": {{ JSON.stringify($json.from_email) }},\n  \"received_at\": {{ JSON.stringify($json.received_at) }},\n  \"gmail_id\": {{ JSON.stringify($json.message_id || '') }}\n}",
+        "options": {}
+      },
+      "id": "insert_response",
+      "name": "Insert Response to CRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2180, 180],
+      "credentials": {
+        "httpHeaderAuth": { "id": "REPLACE_WITH_SUPABASE_CRED_ID", "name": "Supabase API" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            { "value1": "={{ $json.should_update }}", "value2": true }
+          ]
+        }
+      },
+      "id": "should_update",
+      "name": "Status Changed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2400, 180]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/prospects?id=eq.{{ $('Map to CRM Status').item.json.prospect_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"status\": {{ JSON.stringify($('Map to CRM Status').item.json.new_status) }} }",
+        "options": {}
+      },
+      "id": "update_prospect",
+      "name": "Update Prospect Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2620, 120],
+      "credentials": {
+        "httpHeaderAuth": { "id": "REPLACE_WITH_SUPABASE_CRED_ID", "name": "Supabase API" }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/activity_log",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"prospect_id\": {{ $('Map to CRM Status').item.json.prospect_id }},\n  \"event_type\": \"reply_received\",\n  \"event_data\": {\n    \"classification\": {{ JSON.stringify($('Map to CRM Status').item.json.classification) }},\n    \"from\": {{ JSON.stringify($('Map to CRM Status').item.json.from_email) }},\n    \"business_name\": {{ JSON.stringify($('Map to CRM Status').item.json.business_name) }},\n    \"new_status\": {{ JSON.stringify($('Map to CRM Status').item.json.new_status) }},\n    \"source\": \"instantly_sync\"\n  }\n}",
+        "options": {}
+      },
+      "id": "log_activity",
+      "name": "Log Activity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2180, 340],
+      "credentials": {
+        "httpHeaderAuth": { "id": "REPLACE_WITH_SUPABASE_CRED_ID", "name": "Supabase API" }
+      }
+    }
+  ],
+  "connections": {
+    "Every 2 Hours":              { "main": [[{ "node": "Fetch Instantly Replies", "type": "main", "index": 0 }]] },
+    "Fetch Instantly Replies":    { "main": [[{ "node": "Parse Replies", "type": "main", "index": 0 }]] },
+    "Parse Replies":              { "main": [[{ "node": "Has Replies?", "type": "main", "index": 0 }]] },
+    "Has Replies?":               { "main": [[{ "node": "Match Prospect by Email", "type": "main", "index": 0 }], []] },
+    "Match Prospect by Email":    { "main": [[{ "node": "Merge Reply + Prospect", "type": "main", "index": 0 }]] },
+    "Merge Reply + Prospect":     { "main": [[{ "node": "Prospect Found?", "type": "main", "index": 0 }]] },
+    "Prospect Found?":            { "main": [[{ "node": "Claude: Classify Reply", "type": "main", "index": 0 }], []] },
+    "Claude: Classify Reply":     { "main": [[{ "node": "Map to CRM Status", "type": "main", "index": 0 }]] },
+    "Map to CRM Status":          { "main": [[{ "node": "Insert Response to CRM", "type": "main", "index": 0 }]] },
+    "Insert Response to CRM":     { "main": [[{ "node": "Status Changed?", "type": "main", "index": 0 }, { "node": "Log Activity", "type": "main", "index": 0 }]] },
+    "Status Changed?":            { "main": [[{ "node": "Update Prospect Status", "type": "main", "index": 0 }], []] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

@@ -88,14 +88,27 @@ export async function searchLodgeDecisionMakers(
     titles = ["owner", "general manager", "president", "founder", "proprietor"],
   } = params;
 
-  return apolloPost<ApolloSearchResponse>("/mixed_people/search", {
-    q_keywords: keywords,
-    person_titles: titles,
-    person_locations: ["United States"],
-    organization_num_employees_ranges: ["1,10", "11,20", "21,50"],
-    page,
-    per_page: perPage,
-  });
+  // Try /people/search first (available on Basic), fall back to /mixed_people/search
+  try {
+    return await apolloPost<ApolloSearchResponse>("/people/search", {
+      q_keywords: keywords,
+      person_titles: titles,
+      person_locations: ["United States"],
+      organization_num_employees_ranges: ["1,10", "11,20", "21,50"],
+      page,
+      per_page: perPage,
+    });
+  } catch (e) {
+    // If /people/search also fails, try /mixed_people/search as fallback
+    return apolloPost<ApolloSearchResponse>("/mixed_people/search", {
+      q_keywords: keywords,
+      person_titles: titles,
+      person_locations: ["United States"],
+      organization_num_employees_ranges: ["1,10", "11,20", "21,50"],
+      page,
+      per_page: perPage,
+    });
+  }
 }
 
 // --- Enrichment (optional — search already returns most of what we need) ---

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.twenty1.learn-from-wins</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <!-- Path to tsx on Mac Mini — adjust if different -->
+        <string>/usr/local/bin/npx</string>
+        <string>tsx</string>
+        <string>/Users/isaacwalden/twenty1-crm/scripts/learn-from-wins.ts</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/isaacwalden/twenty1-crm</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- IMPORTANT: Replace these placeholder values with your real keys on the Mac Mini -->
+        <key>ANTHROPIC_API_KEY</key>
+        <string>REPLACE_WITH_YOUR_ANTHROPIC_API_KEY</string>
+        <key>SUPABASE_URL</key>
+        <string>REPLACE_WITH_YOUR_SUPABASE_URL</string>
+        <key>SUPABASE_SERVICE_KEY</key>
+        <string>REPLACE_WITH_YOUR_SUPABASE_SERVICE_KEY</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+        <key>HOME</key>
+        <string>/Users/isaacwalden</string>
+    </dict>
+
+    <!-- Run nightly at 11:00 PM local time -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>23</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <!-- Logging -->
+    <key>StandardOutPath</key>
+    <string>/Users/isaacwalden/twenty1-crm/logs/learn-from-wins.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/isaacwalden/twenty1-crm/logs/learn-from-wins-error.log</string>
+
+    <!-- Don't restart on crash — wait for next scheduled run -->
+    <key>KeepAlive</key>
+    <false/>
+
+    <!-- Allow the script up to 5 minutes to complete -->
+    <key>TimeOut</key>
+    <integer>300</integer>
+</dict>
+</plist>
