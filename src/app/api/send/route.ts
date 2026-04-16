@@ -27,6 +27,8 @@ export async function POST(req: NextRequest) {
     const followupDate = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     const today = new Date().toISOString().split("T")[0];
 
+    // Prospect status advancement (prospected -> cold_sent -> followed_up) is
+    // handled by the DB trigger trg_auto_update_prospect_status_on_email_sent.
     await supabase.from("emails").insert({
       prospect_id: prospect_id || null,
       type,
@@ -40,21 +42,6 @@ export async function POST(req: NextRequest) {
       status: "sent",
       sent_at: today,
     });
-
-    if (prospect_id) {
-      const { data: prospect } = await supabase
-        .from("prospects")
-        .select("status")
-        .eq("id", prospect_id)
-        .single();
-
-      if (prospect && prospect.status === "prospected" && type === "followup") {
-        await supabase
-          .from("prospects")
-          .update({ status: "followed_up", updated_at: new Date().toISOString() })
-          .eq("id", prospect_id);
-      }
-    }
 
     return NextResponse.json({ success: true, messageId: result.messageId, threadId: result.threadId });
   } catch (err: unknown) {
