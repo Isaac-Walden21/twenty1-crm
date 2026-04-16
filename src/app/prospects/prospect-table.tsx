@@ -85,6 +85,25 @@ function ProspectRow({
 }) {
   const router = useRouter();
   const [drafting, setDrafting] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  function handleCopyPrompt() {
+    const name = p.contact_name || "the owner";
+    const biz = p.business_name;
+    const location = [p.city, p.state].filter(Boolean).join(", ") || "unknown location";
+    let website = "";
+    try {
+      const notes = JSON.parse(p.notes || "{}");
+      website = notes.website || "";
+    } catch {}
+
+    const prompt = `use cold-email to draft an email to ${name} at ${biz} in ${location}${website ? `, website is ${website}` : ""}`;
+
+    navigator.clipboard.writeText(prompt).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
 
   async function handleDraftEmail() {
     setDrafting(true);
@@ -141,13 +160,21 @@ function ProspectRow({
         </td>
         <td className="py-3 text-right text-zinc-400">${p.price_estimate?.toLocaleString() || "---"}</td>
         <td className="py-3 text-right">
-          <button
-            onClick={handleDraftEmail}
-            disabled={drafting || !p.email}
-            className="px-2.5 py-1 rounded text-xs font-medium transition-colors bg-emerald-600/20 text-emerald-400 border border-emerald-600/30 hover:bg-emerald-600/40 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {drafting ? "Drafting..." : "Draft"}
-          </button>
+          <div className="flex items-center justify-end gap-1.5">
+            <button
+              onClick={handleCopyPrompt}
+              className="px-2.5 py-1 rounded text-xs font-medium transition-colors bg-zinc-700/40 text-zinc-300 border border-zinc-600/30 hover:bg-zinc-700/60"
+            >
+              {copied ? "Copied" : "Prompt"}
+            </button>
+            <button
+              onClick={handleDraftEmail}
+              disabled={drafting || !p.email}
+              className="px-2.5 py-1 rounded text-xs font-medium transition-colors bg-emerald-600/20 text-emerald-400 border border-emerald-600/30 hover:bg-emerald-600/40 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {drafting ? "Drafting..." : "Draft"}
+            </button>
+          </div>
         </td>
       </tr>
       {isExpanded && (
