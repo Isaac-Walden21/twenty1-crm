@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 const STATUSES = [
   { value: "prospected", label: "Prospected", color: "bg-zinc-500/20 text-zinc-300" },
@@ -24,13 +24,26 @@ export function StatusUpdater({
   currentNotes: string;
 }) {
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notes, setNotes] = useState(currentNotes);
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
   const [salePrice, setSalePrice] = useState("");
+  const restoreScrollRef = useRef<number | null>(null);
 
   const current = STATUSES.find((s) => s.value === currentStatus) || STATUSES[0];
+
+  // After router.refresh() runs inside startTransition, isPending flips true
+  // while the server re-fetches, then false once the new tree commits. That's
+  // our signal to restore the scroll position captured before the refresh.
+  useEffect(() => {
+    if (!isPending && restoreScrollRef.current !== null) {
+      const y = restoreScrollRef.current;
+      restoreScrollRef.current = null;
+      window.scrollTo(0, y);
+    }
+  }, [isPending]);
 
   async function updateStatus(newStatus: string) {
     if (newStatus === "closed_won" && pendingStatus !== "closed_won") {
@@ -38,7 +51,7 @@ export function StatusUpdater({
       return;
     }
 
-    const scrollY = window.scrollY;
+    restoreScrollRef.current = window.scrollY;
     setSaving(true);
     await fetch("/api/prospects", {
       method: "PATCH",
@@ -53,15 +66,8 @@ export function StatusUpdater({
     setSaving(false);
     setOpen(false);
     setPendingStatus(null);
-    router.refresh();
-
-    // router.refresh() re-mounts the server component and resets scroll.
-    // Restore the previous position on the next two frames so the restoration
-    // runs after React has committed the refreshed tree.
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        window.scrollTo(0, scrollY);
-      });
+    startTransition(() => {
+      router.refresh();
     });
   }
 
