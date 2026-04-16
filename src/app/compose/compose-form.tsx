@@ -146,13 +146,29 @@ export function ComposeForm({
   const router = useRouter();
   const [prospectId, setProspectId] = useState<number | "">(prefillProspectId || "");
   const [to, setTo] = useState(prefillTo);
-  const [subject, setSubject] = useState("");
-  const [body, setBody] = useState("");
   const [type, setType] = useState(prefillType);
   const [sender, setSender] = useState("isaac");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
+
+  // Check sessionStorage for an AI-drafted email (set by "Draft" button on prospects page)
+  const draft = (() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = sessionStorage.getItem("draft-email");
+      if (!raw) return null;
+      const d = JSON.parse(raw);
+      if (d.prospect_id === prefillProspectId) {
+        sessionStorage.removeItem("draft-email");
+        return d as { subject: string; body: string };
+      }
+    } catch {}
+    return null;
+  })();
+
+  const [subject, setSubject] = useState(draft?.subject || "");
+  const [body, setBody] = useState(draft?.body || "");
 
   function selectProspect(id: number) {
     const p = prospects.find((x) => x.id === id);

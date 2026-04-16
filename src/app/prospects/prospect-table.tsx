@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { StatusUpdater } from "./status-updater";
 import { ThreadToggle, ThreadPanel } from "./expandable-thread";
 
@@ -48,6 +49,7 @@ export function ProspectTable({
           <th className="pb-3 font-medium">Engagement</th>
           <th className="pb-3 font-medium">Emails</th>
           <th className="pb-3 font-medium text-right">Est. Value</th>
+          <th className="pb-3 font-medium"></th>
         </tr>
       </thead>
       <tbody>
@@ -81,6 +83,33 @@ function ProspectRow({
   isExpanded: boolean;
   onToggle: () => void;
 }) {
+  const router = useRouter();
+  const [drafting, setDrafting] = useState(false);
+
+  async function handleDraftEmail() {
+    setDrafting(true);
+    try {
+      const res = await fetch("/api/draft-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prospect_id: p.id }),
+      });
+      const data = await res.json();
+      if (data.subject && data.body) {
+        sessionStorage.setItem("draft-email", JSON.stringify({
+          prospect_id: p.id,
+          subject: data.subject,
+          body: data.body,
+        }));
+        router.push(`/compose?prospect_id=${p.id}&type=cold`);
+      }
+    } catch {
+      // silently fail — user can still manually compose
+    } finally {
+      setDrafting(false);
+    }
+  }
+
   return (
     <>
       <tr className={`border-b border-zinc-800/50 hover:bg-zinc-900/50 ${isExpanded ? "bg-zinc-900/50" : ""}`}>
@@ -111,10 +140,19 @@ function ProspectRow({
           />
         </td>
         <td className="py-3 text-right text-zinc-400">${p.price_estimate?.toLocaleString() || "---"}</td>
+        <td className="py-3 text-right">
+          <button
+            onClick={handleDraftEmail}
+            disabled={drafting || !p.email}
+            className="px-2.5 py-1 rounded text-xs font-medium transition-colors bg-emerald-600/20 text-emerald-400 border border-emerald-600/30 hover:bg-emerald-600/40 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {drafting ? "Drafting..." : "Draft"}
+          </button>
+        </td>
       </tr>
       {isExpanded && (
         <tr>
-          <td colSpan={9} className="p-0 bg-zinc-950 border-b border-zinc-800">
+          <td colSpan={10} className="p-0 bg-zinc-950 border-b border-zinc-800">
             <ThreadPanel prospectId={p.id} businessName={p.business_name} />
           </td>
         </tr>
