@@ -11,9 +11,23 @@ type Prospect = {
   vertical: string | null;
   instagram_handle: string | null;
   dm_angle: string | null;
+  skill_rec: string | null;
+  skill_why: string | null;
   reviews: number | null;
   rating: number | null;
   status: string;
+};
+
+const SKILL_STYLES: Record<string, string> = {
+  "content-script-writer": "bg-purple-500/15 text-purple-300 border-purple-700/50",
+  "client-email-writer": "bg-sky-500/15 text-sky-300 border-sky-700/50",
+  "landing-page-offer": "bg-amber-500/15 text-amber-300 border-amber-700/50",
+};
+
+const SKILL_LABELS: Record<string, string> = {
+  "content-script-writer": "Content Scripts",
+  "client-email-writer": "Client Emails",
+  "landing-page-offer": "Landing Page",
 };
 
 const COLUMNS = [
@@ -110,17 +124,37 @@ export function KanbanBoard({ prospects }: { prospects: Prospect[] }) {
                                 </span>
                               )}
                             </div>
-                            {prospect.dm_angle && (
-                              <p
+                            {prospect.skill_rec && (
+                              <span
+                                className={`inline-block mt-1.5 px-1.5 py-0.5 text-[10px] font-medium rounded border ${
+                                  SKILL_STYLES[prospect.skill_rec] ||
+                                  "bg-zinc-700/30 text-zinc-300 border-zinc-600"
+                                }`}
+                              >
+                                {SKILL_LABELS[prospect.skill_rec] || prospect.skill_rec}
+                              </span>
+                            )}
+                            {(prospect.dm_angle || prospect.skill_why) && (
+                              <div
                                 onClick={() =>
                                   setExpanded(expanded === prospect.id ? null : prospect.id)
                                 }
-                                className={`text-[11px] text-zinc-500 mt-1.5 cursor-pointer ${
-                                  expanded === prospect.id ? "" : "line-clamp-2"
-                                }`}
+                                className="mt-1.5 cursor-pointer"
                               >
-                                {prospect.dm_angle}
-                              </p>
+                                <p
+                                  className={`text-[11px] text-zinc-500 ${
+                                    expanded === prospect.id ? "" : "line-clamp-2"
+                                  }`}
+                                >
+                                  {prospect.dm_angle}
+                                </p>
+                                {expanded === prospect.id && prospect.skill_why && (
+                                  <p className="text-[11px] text-zinc-400 mt-1.5 border-t border-zinc-700 pt-1.5">
+                                    <span className="font-medium text-zinc-300">Why this skill: </span>
+                                    {prospect.skill_why}
+                                  </p>
+                                )}
+                              </div>
                             )}
                           </div>
                         )}

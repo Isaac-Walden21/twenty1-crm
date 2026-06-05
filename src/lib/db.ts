@@ -18,6 +18,8 @@ export interface ProspectRow {
   website: string | null;
   phone: string | null;
   dm_angle: string | null;
+  skill_rec: string | null;
+  skill_why: string | null;
   reviews: number | null;
   rating: number | null;
   notes: string | null;

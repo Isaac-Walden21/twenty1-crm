@@ -22,6 +22,8 @@ export default async function HomePage() {
           vertical: p.vertical,
           instagram_handle: p.instagram_handle,
           dm_angle: p.dm_angle,
+          skill_rec: p.skill_rec,
+          skill_why: p.skill_why,
           reviews: p.reviews,
           rating: p.rating,
           status: p.status,
